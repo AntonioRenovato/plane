@@ -1,0 +1,152 @@
+name: plane-custom
+
+x-app-env: &app-env
+  WEB_URL: ${WEB_URL:?required}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?required}
+  DEBUG: "0"
+  SECRET_KEY: ${SECRET_KEY:?required}
+  LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY:?required}
+  DATABASE_URL: ${DATABASE_URL:?required}
+  REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+  AMQP_URL: ${AMQP_URL:?required}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?required}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?required}
+  AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+  AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://plane-minio:9000}
+  USE_MINIO: ${USE_MINIO:-1}
+  MINIO_ENDPOINT_SSL: ${MINIO_ENDPOINT_SSL:-0}
+  GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+
+x-backend: &backend
+  image: ${IMAGE_REGISTRY:?required}-backend:${IMAGE_TAG:?required}
+  environment: *app-env
+  restart: unless-stopped
+  networks: [plane]
+
+services:
+  web:
+    image: ${IMAGE_REGISTRY:?required}-web:${IMAGE_TAG:?required}
+    restart: unless-stopped
+    networks: [plane]
+  admin:
+    image: ${IMAGE_REGISTRY:?required}-admin:${IMAGE_TAG:?required}
+    restart: unless-stopped
+    networks: [plane]
+  space:
+    image: ${IMAGE_REGISTRY:?required}-space:${IMAGE_TAG:?required}
+    restart: unless-stopped
+    networks: [plane]
+  live:
+    image: ${IMAGE_REGISTRY:?required}-live:${IMAGE_TAG:?required}
+    environment:
+      API_BASE_URL: http://api:8000
+      REDIS_URL: ${REDIS_URL:-redis://plane-redis:6379/}
+      LIVE_SERVER_SECRET_KEY: ${LIVE_SERVER_SECRET_KEY:?required}
+    restart: unless-stopped
+    networks: [plane]
+  api:
+    <<: *backend
+    command: ./bin/docker-entrypoint-api.sh
+    volumes: [logs_api:/code/plane/logs]
+    depends_on:
+      plane-db: {condition: service_healthy}
+      plane-redis: {condition: service_healthy}
+      plane-mq: {condition: service_healthy}
+  worker:
+    <<: *backend
+    command: ./bin/docker-entrypoint-worker.sh
+    volumes: [logs_worker:/code/plane/logs]
+    depends_on:
+      plane-db: {condition: service_healthy}
+      plane-redis: {condition: service_healthy}
+      plane-mq: {condition: service_healthy}
+  beat-worker:
+    <<: *backend
+    command: ./bin/docker-entrypoint-beat.sh
+    volumes: [logs_beat:/code/plane/logs]
+    depends_on:
+      plane-db: {condition: service_healthy}
+      plane-redis: {condition: service_healthy}
+      plane-mq: {condition: service_healthy}
+  migrator:
+    <<: *backend
+    command: ./bin/docker-entrypoint-migrator.sh
+    restart: "no"
+    profiles: [migration]
+    volumes: [logs_migrator:/code/plane/logs]
+    depends_on:
+      plane-db: {condition: service_healthy}
+      plane-redis: {condition: service_healthy}
+  proxy:
+    image: ${IMAGE_REGISTRY:?required}-proxy:${IMAGE_TAG:?required}
+    environment:
+      SITE_ADDRESS: :80
+      FILE_SIZE_LIMIT: ${FILE_SIZE_LIMIT:-5242880}
+      BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      TRUSTED_PROXIES: private_ranges
+    ports: ["127.0.0.1:8081:80"]
+    restart: unless-stopped
+    networks: [plane]
+    depends_on: [web, admin, space, live, api]
+  plane-db:
+    image: postgres:15.7-alpine
+    command: postgres -c max_connections=1000
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [plane]
+  plane-redis:
+    image: valkey/valkey:7.2.11-alpine
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [plane]
+  plane-mq:
+    image: rabbitmq:3.13.6-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?required}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?required}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-plane}
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+    networks: [plane]
+  plane-minio:
+    image: docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+    command: server /export --console-address :9090
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:?required}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:?required}
+    volumes: [uploads:/export]
+    restart: unless-stopped
+    networks: [plane]
+
+networks:
+  plane:
+    name: plane-custom
+
+volumes:
+  pgdata: {name: plane-custom-pgdata}
+  redisdata: {name: plane-custom-redisdata}
+  rabbitmq_data: {name: plane-custom-rabbitmq}
+  uploads: {name: plane-custom-uploads}
+  logs_api: {name: plane-custom-logs-api}
+  logs_worker: {name: plane-custom-logs-worker}
+  logs_beat: {name: plane-custom-logs-beat}
+  logs_migrator: {name: plane-custom-logs-migrator}

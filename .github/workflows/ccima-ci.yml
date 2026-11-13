@@ -1,0 +1,117 @@
+name: CCIMA CI
+
+on:
+  pull_request:
+    branches: [preview, desarrollo/plane-v1.4.3, deploy/plane-v1.4.3]
+  push:
+    branches: [preview, desarrollo/plane-v1.4.3, deploy/plane-v1.4.3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ccima-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      api: ${{ steps.filter.outputs.api }}
+      delivery: ${{ steps.filter.outputs.delivery }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'apps/web/**'
+              - 'apps/admin/**'
+              - 'apps/space/**'
+              - 'apps/live/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+            api:
+              - 'apps/api/**'
+            delivery:
+              - '.github/workflows/ccima-*.yml'
+              - 'deployments/ccima/**'
+              - 'apps/**/Dockerfile*'
+              - 'apps/proxy/**'
+
+  frontend:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:format
+      - run: pnpm check:lint
+      - run: pnpm check:types
+
+  api:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Lint Python sources
+        run: pip install ruff && ruff check apps/api
+      - name: Compile Python sources
+        run: python -m compileall -q apps/api/plane
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile.api
+          push: false
+          tags: plane-backend:ci
+
+  delivery:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.delivery == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate shell scripts
+        run: shellcheck deployments/ccima/*.sh
+      - name: Validate GitHub Actions workflows
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
+      - name: Validate production Compose
+        env:
+          IMAGE_REGISTRY: ghcr.io/antoniorenovato/plane
+          IMAGE_TAG: sha-0000000000000000000000000000000000000000
+        run: docker compose --env-file deployments/ccima/.env.production.example -f deployments/ccima/docker-compose.production.yml config --quiet
+
+  required:
+    if: always()
+    needs: [changes, frontend, api, delivery]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check component jobs
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          API: ${{ needs.api.result }}
+          DELIVERY: ${{ needs.delivery.result }}
+        run: |
+          for result in "$CHANGES" "$FRONTEND" "$API" "$DELIVERY"; do
+            case "$result" in success|skipped) ;; *) exit 1 ;; esac
+          done

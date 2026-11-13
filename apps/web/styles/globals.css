@@ -5,6 +5,200 @@
 @import "./emoji.css";
 @plugin "@tailwindcss/typography";
 
+/* Grupo CCIMA brand palette. Keep these overrides app-specific so the admin
+ * interface and shared UI package retain Plane's defaults. */
+:root {
+  --neutral-white: #ffffff;
+  --neutral-100: #fafbfc;
+  --neutral-200: #f7f8fa;
+  --neutral-300: #f2f4f7;
+  --neutral-400: #e7e9ed;
+  --neutral-500: #d9dce1;
+  --neutral-600: #c8ccd2;
+  --neutral-700: #b6bbc2;
+  --neutral-800: #a3a8af;
+  --neutral-900: #8e949b;
+  --neutral-1000: #68717b;
+  --neutral-1100: #3f4b5b;
+  --neutral-1200: #0b1d44;
+  --neutral-black: #071126;
+
+  --brand-100: #f2f4f7;
+  --brand-200: #e7ebf2;
+  --brand-300: #d1d9e7;
+  --brand-400: #aebbd1;
+  --brand-500: #8498ba;
+  --brand-600: #5e78a3;
+  --brand-700: #3d5a87;
+  --brand-800: #243f6d;
+  --brand-900: #0b1d44;
+  --brand-1000: #081735;
+  --brand-1100: #061127;
+  --brand-1200: #040b1b;
+  --brand-default: #0b1d44;
+
+  --red-700: #d71920;
+
+  --bg-canvas: rgba(242, 244, 247, 0.53);
+  --bg-surface-1: rgba(255, 255, 255, 0.31);
+  --bg-surface-2: rgba(231, 235, 242, 0.25);
+  --bg-layer-1: rgba(255, 255, 255, 0.15);
+  --bg-layer-1-hover: rgba(231, 235, 242, 0.33);
+  --bg-layer-1-active: rgba(209, 217, 231, 0.39);
+  --bg-layer-1-selected: rgba(209, 217, 231, 0.45);
+  --bg-layer-2: rgba(255, 255, 255, 0.21);
+  --bg-layer-2-hover: rgba(242, 244, 247, 0.37);
+  --bg-layer-2-active: rgba(231, 235, 242, 0.43);
+  --bg-layer-2-selected: rgba(231, 235, 242, 0.49);
+  --bg-layer-3: rgba(242, 244, 247, 0.23);
+  --bg-layer-3-hover: rgba(231, 235, 242, 0.37);
+  --bg-layer-3-active: rgba(209, 217, 231, 0.43);
+  --bg-layer-3-selected: rgba(209, 217, 231, 0.49);
+
+  --border-subtle: rgba(11, 29, 68, 0.08);
+  --border-subtle-1: rgba(11, 29, 68, 0.12);
+  --border-strong: rgba(11, 29, 68, 0.18);
+  --border-strong-1: rgba(11, 29, 68, 0.26);
+  --border-inverse: rgba(11, 29, 68, 0.2);
+  --border-disabled: rgba(11, 29, 68, 0.06);
+
+  --txt-primary: #0b1d44;
+  --txt-secondary: #3f4b5b;
+  --txt-tertiary: #68717b;
+  --txt-placeholder: #8e949b;
+  --txt-disabled: #a3a8af;
+  --txt-accent-primary: #0b1d44;
+  --txt-accent-secondary: #243f6d;
+  --txt-on-color: #ffffff;
+  --txt-inverse: #ffffff;
+  --txt-icon-primary: #0b1d44;
+  --txt-icon-secondary: #3f4b5b;
+  --txt-icon-tertiary: #68717b;
+  --txt-icon-placeholder: #8e949b;
+  --txt-icon-disabled: #a3a8af;
+  --txt-icon-on-color: #ffffff;
+  --glass-menu-background: rgba(255, 255, 255, 0.835);
+  --glass-menu-border: rgba(11, 29, 68, 0.12);
+}
+
+[data-theme*="dark"] {
+  --neutral-black: #050b18;
+  --neutral-100: #0b1d44;
+  --neutral-200: #10264f;
+  --neutral-300: #182e56;
+  --neutral-400: #233960;
+  --neutral-500: #30466b;
+  --neutral-600: #405679;
+  --neutral-700: #596c8a;
+  --neutral-800: #8e949b;
+  --neutral-900: #a8adb3;
+  --neutral-1000: #c3c7cc;
+  --neutral-1100: #dfe2e5;
+  --neutral-1200: #f2f4f7;
+  --neutral-white: #ffffff;
+
+  --brand-100: #27151f;
+  --brand-200: #3e1721;
+  --brand-300: #5e1821;
+  --brand-400: #85191f;
+  --brand-500: #ad1a20;
+  --brand-700: #e33d42;
+  --brand-800: #ed666a;
+  --brand-900: #f38b8e;
+  --brand-1000: #f8b3b5;
+  --brand-1100: #fbd4d5;
+  --brand-1200: #fff0f0;
+  --brand-default: #d71920;
+
+  --red-700: #d71920;
+
+  --bg-canvas: rgba(5, 11, 24, 0.47);
+  --bg-surface-1: rgba(11, 29, 68, 0.25);
+  --bg-surface-2: rgba(16, 38, 79, 0.19);
+  --bg-layer-1: rgba(24, 46, 86, 0.13);
+  --bg-layer-1-hover: rgba(35, 57, 96, 0.27);
+  --bg-layer-1-active: rgba(48, 70, 107, 0.35);
+  --bg-layer-1-selected: rgba(48, 70, 107, 0.41);
+  --bg-layer-2: rgba(24, 46, 86, 0.17);
+  --bg-layer-2-hover: rgba(35, 57, 96, 0.31);
+  --bg-layer-2-active: rgba(48, 70, 107, 0.39);
+  --bg-layer-2-selected: rgba(48, 70, 107, 0.45);
+  --bg-layer-3: rgba(35, 57, 96, 0.21);
+  --bg-layer-3-hover: rgba(48, 70, 107, 0.33);
+  --bg-layer-3-active: rgba(64, 86, 121, 0.41);
+  --bg-layer-3-selected: rgba(64, 86, 121, 0.47);
+
+  --border-subtle: rgba(142, 148, 155, 0.1);
+  --border-subtle-1: rgba(94, 120, 163, 0.2);
+  --border-strong: rgba(94, 120, 163, 0.3);
+  --border-strong-1: rgba(94, 120, 163, 0.42);
+  --border-inverse: rgba(94, 120, 163, 0.32);
+  --border-disabled: rgba(142, 148, 155, 0.08);
+
+  --txt-primary: #f2f4f7;
+  --txt-secondary: #dfe2e5;
+  --txt-tertiary: #c3c7cc;
+  --txt-placeholder: #a8adb3;
+  --txt-disabled: #8e949b;
+  --txt-accent-primary: #ff8b8f;
+  --txt-accent-secondary: #ffb3b5;
+  --txt-on-color: #ffffff;
+  --txt-inverse: #0b1d44;
+  --txt-icon-primary: #f2f4f7;
+  --txt-icon-secondary: #dfe2e5;
+  --txt-icon-tertiary: #c3c7cc;
+  --txt-icon-placeholder: #a8adb3;
+  --txt-icon-disabled: #8e949b;
+  --txt-icon-on-color: #ffffff;
+  --glass-menu-background: rgba(11, 29, 68, 0.82);
+  --glass-menu-border: rgba(142, 148, 155, 0.2);
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(215, 25, 32, 0.1), transparent 30rem),
+    radial-gradient(circle at 88% 88%, rgba(11, 29, 68, 0.18), transparent 36rem), #f2f4f7;
+}
+
+[data-theme*="dark"] body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(215, 25, 32, 0.16), transparent 32rem),
+    radial-gradient(circle at 88% 88%, rgba(94, 120, 163, 0.18), transparent 38rem), #050b18;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border-subtle);
+  }
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:is(.glass-panel, .bg-surface-1) {
+  -webkit-backdrop-filter: blur(5px) saturate(150%);
+  backdrop-filter: blur(5px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+/* Floating menus need a denser glass surface so underlying labels do not
+ * compete with menu actions. */
+:is([role="menu"].bg-surface-1, [role="menu"] > .bg-surface-1) {
+  background: var(--glass-menu-background);
+  border-color: var(--glass-menu-border);
+  box-shadow: 0 12px 32px rgba(5, 11, 24, 0.22);
+}
+
+[role="menu"] {
+  z-index: 1000 !important;
+  isolation: isolate;
+}
+
 /* stickies and editor colors */
 :root {
   /* text colors */
