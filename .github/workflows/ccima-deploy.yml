@@ -1,0 +1,111 @@
+name: CCIMA Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: Full 40-character commit SHA whose images were published
+        required: true
+        type: string
+      confirm:
+        description: Type DEPLOY to confirm the controlled deployment
+        required: true
+        type: string
+      backup_confirmed:
+        description: Confirm that a current, restorable PostgreSQL backup was verified
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ccima-production
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Enforce production deployment policy
+        env:
+          DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
+          CONFIRM: ${{ inputs.confirm }}
+          BACKUP_CONFIRMED: ${{ inputs.backup_confirmed }}
+          IMAGE_SHA: ${{ inputs.image_sha }}
+        run: |
+          [[ "$GITHUB_REF" == 'refs/heads/deploy/plane-v1.4.3' ]] || { echo 'Deployments are allowed only from deploy/plane-v1.4.3.' >&2; exit 1; }
+          [[ "$DEPLOY_ENABLED" == 'true' ]] || { echo 'Deployment is disabled by DEPLOY_ENABLED.' >&2; exit 1; }
+          [[ "$CONFIRM" == 'DEPLOY' ]] || { echo 'Confirmation text is invalid.' >&2; exit 1; }
+          [[ "$BACKUP_CONFIRMED" == 'true' ]] || { echo 'A verified database backup is required.' >&2; exit 1; }
+          [[ "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'image_sha must be a full lowercase commit SHA.' >&2; exit 1; }
+          git merge-base --is-ancestor "$IMAGE_SHA" "$GITHUB_SHA" || { echo 'image_sha is not approved history from deploy/plane-v1.4.3.' >&2; exit 1; }
+
+  verify-images:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify all immutable images exist in GHCR
+        env:
+          IMAGE_SHA: ${{ inputs.image_sha }}
+        run: |
+          for image in web admin space backend live proxy; do
+            ref="ghcr.io/antoniorenovato/plane-${image}:sha-${IMAGE_SHA}"
+            echo "Verifying $ref"
+            docker buildx imagetools inspect "$ref" >/dev/null
+          done
+
+  deploy:
+    needs: verify-images
+    runs-on: ubuntu-latest
+    environment: plane-production
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Validate immutable version and external SSH endpoint
+        env:
+          IMAGE_SHA: ${{ inputs.image_sha }}
+          SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
+        run: |
+          [[ -n "$SSH_HOST" ]]
+          case "$SSH_HOST" in
+            192.168.*|10.*|127.*|localhost|172.1[6-9].*|172.2[0-9].*|172.3[01].*)
+              echo "DEPLOY_SSH_HOST must be an externally reachable VPN/bastion/tunnel endpoint, not a private target." >&2
+              exit 1
+              ;;
+          esac
+      - name: Configure pinned SSH identity
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_HOST_KEY: ${{ secrets.DEPLOY_SSH_HOST_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_HOST_KEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Copy versioned deployment assets
+        env:
+          HOST: ${{ vars.DEPLOY_SSH_HOST }}
+          PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          USER: ${{ vars.DEPLOY_SSH_USER }}
+        run: |
+          ssh -p "${PORT:-22}" "$USER@$HOST" 'install -d -m 750 /opt/plane-custom/releases/incoming'
+          scp -P "${PORT:-22}" deployments/ccima/docker-compose.production.yml deployments/ccima/deploy.sh deployments/ccima/rollback.sh "$USER@$HOST:/opt/plane-custom/releases/incoming/"
+      - name: Deploy on server
+        env:
+          HOST: ${{ vars.DEPLOY_SSH_HOST }}
+          PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          USER: ${{ vars.DEPLOY_SSH_USER }}
+          IMAGE_SHA: ${{ inputs.image_sha }}
+        run: ssh -p "${PORT:-22}" "$USER@$HOST" "CONFIRM_DB_BACKUP=yes bash /opt/plane-custom/releases/incoming/deploy.sh sha-$IMAGE_SHA"
