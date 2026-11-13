@@ -48,12 +48,29 @@ IMAGE_TAG="$NEW_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE" --profi
 migration_completed=1
 IMAGE_TAG="$NEW_TAG" docker compose --env-file "$ENV_FILE" -f "$COMPOSE" up -d
 
-for _ in $(seq 1 30); do
-  curl -fsS -H 'Host: plane.grupoccima.com' http://127.0.0.1:8081/ >/dev/null && healthy=1 && break
-  sleep 5
+readonly HEALTH_TIMEOUT_SECONDS=300
+readonly HEALTH_RETRY_SECONDS=5
+readonly HEALTH_BASE_URL=http://127.0.0.1:8081
+health_deadline=$((SECONDS + HEALTH_TIMEOUT_SECONDS))
+frontend_ready=0
+api_ready=0
+
+while (( SECONDS < health_deadline )); do
+  frontend_ready=0
+  api_ready=0
+
+  curl --connect-timeout 3 --max-time 5 -fsS -H 'Host: plane.grupoccima.com' "$HEALTH_BASE_URL/" >/dev/null && frontend_ready=1
+  curl --connect-timeout 3 --max-time 5 -fsS -H 'Host: plane.grupoccima.com' "$HEALTH_BASE_URL/api/instances/" >/dev/null && api_ready=1
+
+  if (( frontend_ready == 1 && api_ready == 1 )); then
+    break
+  fi
+
+  sleep "$HEALTH_RETRY_SECONDS"
 done
-[[ "${healthy:-0}" == 1 ]] || die "health check failed on 127.0.0.1:8081"
-curl --retry 10 --retry-delay 3 --retry-all-errors -fsS -H 'Host: plane.grupoccima.com' http://127.0.0.1:8081/api/instances/ >/dev/null || die "API health check failed"
+
+(( frontend_ready == 1 )) || die "frontend health check timed out after ${HEALTH_TIMEOUT_SECONDS}s: $HEALTH_BASE_URL/"
+(( api_ready == 1 )) || die "API health check timed out after ${HEALTH_TIMEOUT_SECONDS}s: $HEALTH_BASE_URL/api/instances/"
 
 sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$NEW_TAG/" "$ENV_FILE"
 printf '%s\n' "$NEW_TAG" > "$VERSION_FILE"
