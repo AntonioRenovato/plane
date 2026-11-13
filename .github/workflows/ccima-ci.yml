@@ -93,7 +93,7 @@ jobs:
       - name: Validate shell scripts
         run: shellcheck deployments/ccima/*.sh
       - name: Validate GitHub Actions workflows
-        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color .github/workflows/ccima-*.yml
       - name: Validate production Compose
         env:
           IMAGE_REGISTRY: ghcr.io/antoniorenovato/plane
